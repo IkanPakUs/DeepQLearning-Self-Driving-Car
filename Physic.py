@@ -1,4 +1,5 @@
 from pyglet.math import Vec2
+import math
 
 class Physic:
     def checkCollision(self, x1, y1, x2, y2, x3, y3, x4, y4):
@@ -13,3 +14,15 @@ class Physic:
                 return Vec2(intersect_x, intersect_y)
             
         return None
+    
+    def rotate(self, origin_x, origin_y, x, y, angle_radians):
+        theta_cos = math.cos(angle_radians)
+        theta_sin = math.sin(angle_radians)
+        
+        new_x = origin_x + theta_cos * x - theta_sin * y
+        new_y = origin_y + theta_sin * x + theta_cos * y
+        
+        return Vec2(new_x, new_y)
+    
+    def getAngel(self, vec):
+        return math.degrees(math.atan2(vec.y, vec.x))
