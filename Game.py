@@ -18,6 +18,7 @@ class Game:
         self.Map = Map()
         self.Car = Car(self, self.Map)
         
+        self.gate_distance = 40
         self.reward = 0
         
     def newEpisode(self):
@@ -29,7 +30,7 @@ class Game:
     def makeAction(self, action):
         action_no = int(action)
         self.Car.updateCarLocation(action_no)
-        
+
         return self.reward
     
     def isEpisodeFinished(self):
@@ -44,7 +45,7 @@ class Car:
         car_image.anchor_x = car_image.width / 2
         car_image.anchor_y = car_image.height / 2
         
-        self.action_size = 9
+        self.action_size = 6
         
         self.accelerate = False
         self.reverse = False
@@ -55,13 +56,13 @@ class Car:
         self.car.width = 40
         self.car.height = 20
         self.car.rotation = -180
-        self.car.x = 300
+        self.car.x = 320
         self.car.y = 120
 
         self.min_acc = 0
         self.acc = self.min_acc
-        self.acc_step = 4
-        self.max_acc = 100
+        self.acc_step = 20
+        self.max_acc = 200
         
         self.decrease_acc = False
         self.dec_acc_step = 6
@@ -78,13 +79,15 @@ class Car:
         self.car_collision = True
         self.is_dead = False
         
-        self.dt = 1/30
+        self.dt = 1/15
         
         self.Map = Map
         self.Game = Game
         self.CarHitbox = CarHitbox(self, Game, Map)
-        self.CarLine = CarLine(self, Map)
+        self.CarLine = CarLine(self, Game, Map)
         self.Physic = Physic()
+        
+        self.manual_operation = False
         
     def reset(self):
         if (self.car_collision):
@@ -92,15 +95,20 @@ class Car:
             
             self.Map = Map()
             self.CarHitbox = CarHitbox(self, self.Game, self.Map)
-            self.CarLine = CarLine(self, self.Map)
+            self.CarLine = CarLine(self, self.Game, self.Map)
             
             self.car.width = 40
             self.car.height = 20
             self.car.rotation = -180
-            self.car.x = 300
+            self.car.x = 320
             self.car.y = 120
             
-            self.min_acc = 0
+            self.accelerate = False
+            self.reverse = False
+            self.turn_left = False
+            self.turn_right = False
+            
+            self.min_acc = 10
             self.acc = self.min_acc
             self.acc_step = 4
             self.max_acc = 300
@@ -118,6 +126,9 @@ class Car:
             self.car_direction = Vec2(-1, 0)
             
             self.is_dead = False
+            
+            self.Game.gate_distance = 40
+
         
     def updateCarLocation(self, do_action = 8):   
         if not self.is_dead:
@@ -131,42 +142,40 @@ class Car:
         self.CarLine.checkLineCollision()
         self.CarLine.checkClosestGate()
     
-    def checkActions(self, do_no):
-        do_no = 1
+    def checkActions(self, do_no):  
+        if not self.manual_operation:
+            self.accelerate = False
+            self.reverse = False
+            self.turn_left = False
+            self.turn_right = False
+            
+            if do_no == 0:
+                self.accelerate = True
+                self.turn_left = True
+                self.acc = self.min_acc
+            elif do_no == 1:
+                self.accelerate = True
+                self.turn_right = True
+                self.acc = self.min_acc
+            elif do_no == 2:
+                self.accelerate = True
+                self.acc = self.min_acc
+            elif do_no == 3:
+                self.reverse = True
+                self.rev = self.min_rev
+            elif do_no == 4:
+                self.reverse = True
+                self.turn_left = True
+                self.rev = self.min_rev
+            elif do_no == 5:
+                self.reverse = True
+                self.turn_right = True
+                self.rev = self.min_rev
+                
+        self.Game.reward = -1
         
-        self.accelerate = False
-        self.reverse = False
-        self.turn_left = False
-        self.turn_right = False
-        
-        if do_no == 0:
-            self.accelerate = True
-        elif do_no == 1:
-            self.reverse = True
-        elif do_no == 2:
-            self.turn_left = True
-        elif do_no == 3:
-            self.turn_right = True
-        elif do_no == 4:
-            self.accelerate = True
-            self.turn_left = True
-        elif do_no == 5:
-            self.accelerate = True
-            self.turn_right = True
-        elif do_no == 6:
-            self.reverse = True
-            self.turn_left = True
-        elif do_no == 7:
-            self.reverse = True
-            self.turn_right = True
-        elif do_no == 8:
-            pass
-        
-        self.Game.reward = 0
-        
-        for i in range(1):
-            self.checkInput()
-            self.checkSituation()
+        self.checkInput()
+        self.checkSituation()
                     
     def checkInput(self):
         dt = self.dt
@@ -202,15 +211,15 @@ class Car:
     def decreaseAcc(self):
         dt = self.dt
         
-        if self.acc >= self.min_acc and self.decrease_acc:    
+        if self.acc > self.min_acc and self.decrease_acc:    
             self.acc -= self.dec_acc_step
                  
             self.car.x += self.car_direction.x * self.acc * dt
             self.car.y += self.car_direction.y * self.acc * dt
                         
-            if self.acc <= self.min_acc:
-                self.acc = self.min_acc
-                self.decrease_acc = False   
+        if self.acc <= self.min_acc:
+            self.acc = self.min_acc
+            self.decrease_acc = False   
                 
     def getCurrentState(self):    
         self.CarHitbox.checkCarCollision()
@@ -223,9 +232,7 @@ class Car:
         
         normalized_forward_velocity = max(.0, self.acc / self.max_acc)
         normalized_reverse_velocity = max(.0, self.rev / self.max_rev)
-        
-        normalized_closest_gate = max(.0, self.CarLine.gate_distance)
-        
+                
         car_direction = Vec2(self.car_direction.x, self.car_direction.y)
         to_gate_direction = Vec2(self.CarLine.direction_to_gate.x, self.CarLine.direction_to_gate.y)
         normalized_gate_direction = (self.Physic.getAngel(car_direction) - self.Physic.getAngel(to_gate_direction)) % 360
@@ -235,8 +242,8 @@ class Car:
             
         normalized_gate_direction /= 180 
         
-        normalized_state = [*normalized_vision_vector, normalized_forward_velocity, normalized_reverse_velocity, normalized_closest_gate, normalized_gate_direction]
-        
+        normalized_state = [*normalized_vision_vector, normalized_forward_velocity, normalized_reverse_velocity, normalized_gate_direction]
+
         return np.array(normalized_state, dtype=np.float32)
 
 class CarHitbox:
@@ -299,31 +306,33 @@ class CarHitbox:
             x2 = car_box.x2
             y2 = car_box.y2
             
-            for gate in self.Map.reward_gates:
-                x3 = gate.x
-                y3 = gate.y
-                x4 = gate.x2
-                y4 = gate.y2
+            gate = self.Map.reward_gates[self.Map.reward_no]
+            x3 = gate.x
+            y3 = gate.y
+            x4 = gate.x2
+            y4 = gate.y2
+            
+            collision_point = self.Physic.checkCollision(x1, y1, x2, y2, x3, y3, x4, y4)
+            
+            if collision_point is not None:
+                self.Game.reward += 10 if self.Car.acc < 10 else self.Car.acc
+                self.Game.reward -= self.Car.rev
                 
-                collision_point = self.Physic.checkCollision(x1, y1, x2, y2, x3, y3, x4, y4)
-                
-                if collision_point is not None:
-                    gate.delete()
-                    self.Map.reward_gates.remove(gate)
-                    
-                    self.Game.reward += 5
-                    break
+                self.Map.reward_no += 1
+                self.Game.gate_direction = 40
+                break
                 
 class CarLine:
-    def __init__(self, Car, Map) -> None:
+    def __init__(self, Car, Game, Map) -> None:
         self.Car = Car
+        self.Game = Game
         self.Map = Map
         self.Physic = Physic()
         
         self.lines = 30
         self.car_lines = []
         self.long_line = 400
-        self.show_lines = True
+        self.show_lines = False
         
         self.collision_distances = []
         self.line_collision_points = []
@@ -332,7 +341,6 @@ class CarLine:
         self.show_collision_circle = True
         
         self.gate_point = {}
-        self.gate_distance = 0
         self.line_collision_gate = []
         self.direction_to_gate = Vec2(0, 0)
                         
@@ -417,31 +425,30 @@ class CarLine:
             x2 = vision.x2
             y2 = vision.y2
             
-            closest_gate = Vec2(0, 0)
+            gate = self.Map.reward_gates[self.Map.reward_no]
+            x3 = gate.x
+            y3 = gate.y
+            x4 = gate.x2
+            y4 = gate.y2
             
-            for gate in self.Map.reward_gates:
-                x3 = gate.x
-                y3 = gate.y
-                x4 = gate.x2
-                y4 = gate.y2
-                
-                collision_gate = self.Physic.checkCollision(x1, y1, x2, y2, x3, y3, x4, y4)
-                
-                if (collision_gate is None):
-                    continue
-                    
-                if (collision_gate.distance(car_origin) < closest_gate.distance(car_origin)):
-                    closest_gate = collision_gate
+            collision_gate = self.Physic.checkCollision(x1, y1, x2, y2, x3, y3, x4, y4)
             
-            if (closest_gate.x != 0 and closest_gate.y != 0):
-                if (closest_gate.distance(car_origin) < closest_vision.distance(car_origin)):
-                    closest_vision = closest_gate
+            if (collision_gate is None):
+                continue
+            
+            if (collision_gate.distance(car_origin) < closest_vision.distance(car_origin)):
+                closest_vision = collision_gate
                     
         if (closest_vision.x != 0 and closest_vision.y != 0):
+            old_gate_distance = self.Game.gate_distance
+            new_gate_distance = closest_vision.distance(Vec2(self.Car.car.x, self.Car.car.y))
+            
+            if (old_gate_distance > new_gate_distance):
+                self.Game.reward += 5
+                self.Game.gate_distance = new_gate_distance
+            
             self.gate_point = shapes.Circle(closest_vision.x, closest_vision.y, 3, color=(255, 0, 255), batch=batch)
-            self.gate_distance = closest_vision.distance(Vec2(self.Car.car.x, self.Car.car.y))
             self.direction_to_gate = closest_vision - car_origin
-
                             
 class Map:
     def __init__(self) -> None:        
@@ -466,6 +473,8 @@ class Map:
         self.type_line = 'wall'
         
         self.create_line = False
+        
+        self.reward_no = 0
         
         self.loadWalls()
         self.loadGates()
@@ -565,10 +574,10 @@ class Map:
         with open('map_gates.json', 'r') as file:
             gates_coor = json.load(file)
             
-            for gindex, gate in enumerate(list(gates_coor)):
+            for gate in list(gates_coor):
                 reward_gate = self.createRewardGate(gate['x'], gate['y'], gate['x2'], gate['y2'])
                 self.reward_gates.append(reward_gate)
-            
+                            
     def saveWalls(self):
         walls_coor = map( lambda wall: { 'x': wall.x, 'y': wall.y, 'x2': wall.x2, 'y2': wall.y2 }, self.walls)
         walls = json.dumps(list(walls_coor), indent=1)
